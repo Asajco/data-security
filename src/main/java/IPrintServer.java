@@ -1,5 +1,6 @@
 import java.rmi.Remote;
 import java.rmi.RemoteException;
+import java.util.ArrayList;
 
 public interface IPrintServer extends Remote {
     // Authentication methods
@@ -8,7 +9,7 @@ public interface IPrintServer extends Remote {
     
     // Print server operations
     void print(String sessionId, String filename, String printer) throws RemoteException, SecurityException;
-    String queue(String sessionId, String printer) throws RemoteException, SecurityException;
+    ArrayList<String> queue(String sessionId, String printer) throws RemoteException, SecurityException;
     void topQueue(String sessionId, String printer, int job) throws RemoteException, SecurityException;
     void start(String sessionId) throws RemoteException, SecurityException;
     void stop(String sessionId) throws RemoteException, SecurityException;

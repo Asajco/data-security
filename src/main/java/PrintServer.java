@@ -129,15 +129,15 @@ public class PrintServer extends UnicastRemoteObject implements IPrintServer {
     }
 
     @Override
-    public String queue(String sessionId, String printer) 
+    public ArrayList<String> queue(String sessionId, String printer)
             throws RemoteException, SecurityException {
         validateSession(sessionId);
         List<PrintJob> queue = printerQueues.getOrDefault(printer, new ArrayList<>());
-        StringBuilder sb = new StringBuilder();
+        ArrayList<String> q = new ArrayList<>();
         for (PrintJob job : queue) {
-            sb.append(job.jobId).append(" ").append(job.filename).append("\n");
+            q.add(job.jobId + " " + job.filename);
         }
-        return sb.toString();
+        return q;
     }
 
     @Override
