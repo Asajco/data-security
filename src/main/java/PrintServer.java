@@ -1,13 +1,13 @@
 import model.Job;
+import model.OperationResult;
 
-import java.nio.charset.Charset;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.*;
 
 public class PrintServer extends UnicastRemoteObject implements IPrintServer {
     private boolean isRunning;
-    private final Map<String, ArrayDeque<Job>> _printers; // printer -> jobs
+    private final Map<String, ArrayDeque<Job>> _printers;
     private final Map<String, String> _configParams;
 
     private final IAuthenticationService _authenticationService;
@@ -19,15 +19,22 @@ public class PrintServer extends UnicastRemoteObject implements IPrintServer {
         _authenticationService = authenticationService;
 
         this.isRunning = true;
+
+        registerUser("admin", "admin", "ADMIN");
+        registerUser("user", "12345", "USER");
+
+        initPrinters();
+
+        System.out.println(_printers);
     }
 
     @Override
-    public String registerUser(String username, String password, String role) {
+    public OperationResult registerUser(String username, String password, String role) {
         return _authenticationService.register(username, password, role);
     }
 
     @Override
-    public String login(String username, String password) {
+    public OperationResult login(String username, String password) {
         return _authenticationService.login(username, password);
     }
 
@@ -46,11 +53,13 @@ public class PrintServer extends UnicastRemoteObject implements IPrintServer {
             return "Authentication Failed";
         }
 
+        System.out.println(printer);
+
         if (_printers.containsKey(printer)) {
-            int id = new Random(System.currentTimeMillis()).nextInt();
+            int id = Math.abs(new Random(System.currentTimeMillis()).nextInt());
             _printers.get(printer).addLast(new Job(String.valueOf(id), filename));
             return "Job added: " + filename + " on " + printer;
-        } else return  "Specified printer is not available";
+        } else return "Specified printer is not available";
     }
 
     @Override
@@ -89,7 +98,7 @@ public class PrintServer extends UnicastRemoteObject implements IPrintServer {
             }
             if (jobToMove != null) {
                 queue.remove(jobToMove);
-                queue.add(new Job(jobToMove.getJobId(), jobToMove.getFileName()));
+                queue.addFirst(new Job(jobToMove.getJobId(), jobToMove.getFileName()));
                 return "Queue updated successfully";
             }
         }
@@ -149,7 +158,7 @@ public class PrintServer extends UnicastRemoteObject implements IPrintServer {
         if (!_printers.containsKey(printer)) return "Specified printer is not available";
 
         return "Printer " + printer + " is " + (isRunning ? "running" : "stopped") + "\n" +
-               " Jobs in queue: " + "\n" + printQueue(_printers.get(printer));
+               "Jobs in queue: " + "\n" + printQueue(_printers.get(printer));
     }
 
     @Override
@@ -182,5 +191,25 @@ public class PrintServer extends UnicastRemoteObject implements IPrintServer {
             sb.append(job.getJobId()).append(" ").append(job.getFileName()).append("\n");
         }
         return sb.toString();
+    }
+
+    private void initPrinters() {
+        ArrayDeque<Job> queue1 = new ArrayDeque<>();
+        ArrayDeque<Job> queue2 = new ArrayDeque<>();
+
+        queue1.push(new Job("1", "file1.txt"));
+        queue1.push(new Job("2", "file2.txt"));
+        queue1.push(new Job("3", "file3.txt"));
+
+        queue2.push(new Job("11", "file11.txt"));
+        queue2.push(new Job("22", "file22.txt"));
+        queue2.push(new Job("33", "file33.txt"));
+
+        _printers.put("printer1", queue1);
+        _printers.put("printer2", queue2);
+    }
+
+    private void initConfigParams() {
+        _configParams.put("param1", "value1");
     }
 }

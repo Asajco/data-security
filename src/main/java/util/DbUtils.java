@@ -13,7 +13,9 @@ public class DbUtils {
         Connection c;
         if (_props != null) {
             String connStr = "jdbc:mysql://localhost:33061/authdatabase";
+
             try {
+                System.out.println(_props.getProperty("MYSQL_ROOT_PW"));
                 c = DriverManager.getConnection(
                         connStr,
                         _props.getProperty("MYSQL_ROOT_USER"),
@@ -62,17 +64,21 @@ public class DbUtils {
     }
 
     public User getUser(String username) {
-        String query = "SELECT Username FROM Users WHERE Username = ?";
+        String query = "SELECT * FROM Users WHERE Username = ?";
+
+        System.out.println(query);
 
         try(PreparedStatement ps = this._conn.prepareStatement(query)) {
             ps.setString(1, username);
             ResultSet rs = ps.executeQuery();
+            rs.next();
 
             return new User(
                     rs.getString("Username"),
                     rs.getString("Password"),
                     rs.getString("Role")
             );
+
 
         } catch(SQLException e) {
             e.printStackTrace();

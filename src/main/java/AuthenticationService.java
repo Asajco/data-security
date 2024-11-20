@@ -3,6 +3,7 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import io.jsonwebtoken.security.SecurityException;
+import model.OperationResult;
 import model.User;
 import util.DbUtils;
 import util.PropertiesUtils;
@@ -26,7 +27,7 @@ public class AuthenticationService implements IAuthenticationService {
     }
 
     @Override
-    public String login(String username, String password) {
+    public OperationResult login(String username, String password) {
         // Retrieve user from DB
         User user = _db.getUser(username);
 
@@ -36,13 +37,15 @@ public class AuthenticationService implements IAuthenticationService {
 
             // If the password matches with the one stored in the DB the user gets a token,
             if (user.getHashedPassword().equals(hashedPassword)) {
-                return jwtFromUsername(username);
-            } else return "Invalid password";
-        } else return "There is no account registered with this username";
+                return new OperationResult(jwtFromUsername(username), true);
+            } else return new OperationResult("Invalid password", false);
+        } else return new OperationResult("There is no account registered with this username", false);
     }
 
     @Override
-    public String register(String username, String password, String role) {
+    public OperationResult register(String username, String password, String role) {
+        if (_db.userExists(username)) return new OperationResult("User already exists", false);
+
         // Storing the password in a hashed format instead of plain text
         String hashedPassword = hashPassword(password);
 
@@ -50,8 +53,8 @@ public class AuthenticationService implements IAuthenticationService {
         if(_db.addUser(username, hashedPassword, role)) {
 
             // If SQL update is successful, generate JWT token for the user, to validate their requests
-            return jwtFromUsername(username);
-        } else return "Failed to register user";
+            return new OperationResult(jwtFromUsername(username), true);
+        } else return new OperationResult("Failed to register user", false);
     }
 
     @Override

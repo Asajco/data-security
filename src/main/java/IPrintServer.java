@@ -1,3 +1,5 @@
+import model.OperationResult;
+
 import java.rmi.Remote;
 import java.rmi.RemoteException;
 import java.util.ArrayList;
@@ -5,8 +7,8 @@ import java.util.ArrayList;
 
 public interface IPrintServer extends Remote {
     // Authentication methods
-    String login(String username, String password) throws RemoteException;
-    String registerUser(String username, String password, String role) throws RemoteException;
+    OperationResult login(String username, String password) throws RemoteException;
+    OperationResult registerUser(String username, String password, String role) throws RemoteException;
     void logout(String sessionId) throws RemoteException;
     
     // Print server operations

@@ -2,7 +2,6 @@ package util;
 
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.sql.DriverManager;
 import java.util.Properties;
 
 public class PropertiesUtils {
