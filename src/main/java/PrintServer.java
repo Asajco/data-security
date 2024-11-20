@@ -1,208 +1,186 @@
+import model.Job;
+
+import java.nio.charset.Charset;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 public class PrintServer extends UnicastRemoteObject implements IPrintServer {
-    private static final long SESSION_DURATION = 30 * 60 * 1000; // 30 minutes
-    private final Map<String, String> passwordStore; // username -> hashedPassword
-    private final Map<String, SessionInfo> sessions; // sessionId -> SessionInfo
-    private final SecureRandom secureRandom;
     private boolean isRunning;
-    private final Map<String, List<PrintJob>> printerQueues; // printer -> jobs
-    private final Map<String, String> configParams;
+    private final Map<String, ArrayDeque<Job>> _printers; // printer -> jobs
+    private final Map<String, String> _configParams;
 
-    private static class SessionInfo {
-        String username;
-        long expirationTime;
+    private final IAuthenticationService _authenticationService;
 
-        SessionInfo(String username, long expirationTime) {
-            this.username = username;
-            this.expirationTime = expirationTime;
-        }
-    }
-
-    private static class PrintJob {
-        int jobId;
-        String filename;
-
-        PrintJob(int jobId, String filename) {
-            this.jobId = jobId;
-            this.filename = filename;
-        }
-    }
-
-    public PrintServer() throws RemoteException {
+    public PrintServer(IAuthenticationService authenticationService) throws RemoteException {
         super();
-        this.passwordStore = new HashMap<>();
-        this.sessions = new ConcurrentHashMap<>();
-        this.secureRandom = new SecureRandom();
+        _printers = new HashMap<>();
+        _configParams = new HashMap<>();
+        _authenticationService = authenticationService;
+
         this.isRunning = true;
-        this.printerQueues = new HashMap<>();
-        this.configParams = new HashMap<>();
-        
-        initializeUsers();
-        startSessionCleanup();
-    }
-
-    private void initializeUsers() {
-        addUser("admin", "admin123");
-        addUser("user1", "pass123");
-    }
-
-    private void addUser(String username, String password) {
-        passwordStore.put(username, hashPassword(password));
-    }
-
-    private String hashPassword(String password) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] hash = md.digest(password.getBytes());
-            return Base64.getEncoder().encodeToString(hash);
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("Failed to hash password", e);
-        }
-    }
-
-    private void startSessionCleanup() {
-        Thread cleanupThread = new Thread(() -> {
-            while (true) {
-                try {
-                    Thread.sleep(60000); // Check every minute
-                    cleanupExpiredSessions();
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
-            }
-        });
-        cleanupThread.setDaemon(true);
-        cleanupThread.start();
-    }
-
-    private void cleanupExpiredSessions() {
-        long now = System.currentTimeMillis();
-        sessions.entrySet().removeIf(entry -> entry.getValue().expirationTime < now);
-    }
-
-    private String generateSessionId() {
-        byte[] randomBytes = new byte[32];
-        secureRandom.nextBytes(randomBytes);
-        return Base64.getEncoder().encodeToString(randomBytes);
-    }
-
-    private void validateSession(String sessionId) throws SecurityException {
-        SessionInfo session = sessions.get(sessionId);
-        if (session == null || session.expirationTime < System.currentTimeMillis()) {
-            sessions.remove(sessionId);
-            throw new SecurityException("Invalid or expired session");
-        }
     }
 
     @Override
-    public String login(String username, String password) throws RemoteException {
-        String storedHash = passwordStore.get(username);
-        if (storedHash != null && storedHash.equals(hashPassword(password))) {
-            String sessionId = generateSessionId();
-            sessions.put(sessionId, new SessionInfo(username, 
-                System.currentTimeMillis() + SESSION_DURATION));
-            return sessionId;
-        }
-        throw new SecurityException("Invalid credentials");
+    public String registerUser(String username, String password, String role) {
+        return _authenticationService.register(username, password, role);
     }
 
     @Override
-    public void logout(String sessionId) throws RemoteException {
-        sessions.remove(sessionId);
+    public String login(String username, String password) {
+        return _authenticationService.login(username, password);
     }
 
     @Override
-    public void print(String sessionId, String filename, String printer) 
+    public void logout(String username) {
+        _authenticationService.logout();
+    }
+
+    @Override
+    public String print(String jwt, String username, String filename, String printer)
             throws RemoteException, SecurityException {
-        validateSession(sessionId);
-        printerQueues.computeIfAbsent(printer, k -> new ArrayList<>())
-            .add(new PrintJob(new Random().nextInt(1000), filename));
-        System.out.println("Printing " + filename + " on " + printer);
-    }
 
-    @Override
-    public ArrayList<String> queue(String sessionId, String printer)
-            throws RemoteException, SecurityException {
-        validateSession(sessionId);
-        List<PrintJob> queue = printerQueues.getOrDefault(printer, new ArrayList<>());
-        ArrayList<String> q = new ArrayList<>();
-        for (PrintJob job : queue) {
-            q.add(job.jobId + " " + job.filename);
+        try{
+            _authenticationService.validateToken(jwt, username);
+        } catch (SecurityException e) {
+            return "Authentication Failed";
         }
-        return q;
+
+        if (_printers.containsKey(printer)) {
+            int id = new Random(System.currentTimeMillis()).nextInt();
+            _printers.get(printer).addLast(new Job(String.valueOf(id), filename));
+            return "Job added: " + filename + " on " + printer;
+        } else return  "Specified printer is not available";
     }
 
     @Override
-    public void topQueue(String sessionId, String printer, int job) 
+    public String queue(String jwt, String username, String printer)
             throws RemoteException, SecurityException {
-        validateSession(sessionId);
-        List<PrintJob> queue = printerQueues.get(printer);
-        if (queue != null) {
-            PrintJob jobToMove = null;
-            for (PrintJob printJob : queue) {
-                if (printJob.jobId == job) {
+
+        try{
+            _authenticationService.validateToken(jwt, username);
+        } catch (SecurityException e) {
+            return "Authentication Failed";
+        }
+
+        ArrayDeque<Job> queue = _printers.get(printer);
+        return printQueue(queue);
+    }
+
+    @Override
+    public String topQueue(String jwt, String username, String printer, String job)
+            throws RemoteException, SecurityException {
+
+        try{
+            _authenticationService.validateToken(jwt, username);
+        } catch (SecurityException e) {
+            return "Authentication Failed";
+        }
+
+        if (_printers.containsKey(printer)) {
+            ArrayDeque<Job> queue = _printers.get(printer);
+            Job jobToMove = null;
+
+            for (Job printJob : queue) {
+                if (printJob.getJobId().equals(job)) {
                     jobToMove = printJob;
                     break;
                 }
             }
             if (jobToMove != null) {
                 queue.remove(jobToMove);
-                queue.add(0, jobToMove);
+                queue.add(new Job(jobToMove.getJobId(), jobToMove.getFileName()));
+                return "Queue updated successfully";
             }
         }
+
+        return  "Specified printer is not available";
     }
 
     @Override
-    public void start(String sessionId) throws RemoteException, SecurityException {
-        validateSession(sessionId);
+    public String start(String jwt, String username) throws RemoteException, SecurityException {
+        try{
+            _authenticationService.validateToken(jwt, username);
+        } catch (SecurityException e) {
+            return "Authentication Failed";
+        }
+
         isRunning = true;
-        System.out.println("Print server started");
+        return "Print server started";
     }
 
     @Override
-    public void stop(String sessionId) throws RemoteException, SecurityException {
-        validateSession(sessionId);
+    public String stop(String jwt, String username) throws RemoteException, SecurityException {
+        try{
+            _authenticationService.validateToken(jwt, username);
+        } catch (SecurityException e) {
+            return "Authentication Failed";
+        }
+
         isRunning = false;
-        System.out.println("Print server stopped");
+        return "Print server stopped";
     }
 
     @Override
-    public void restart(String sessionId) throws RemoteException, SecurityException {
-        validateSession(sessionId);
+    public String restart(String jwt, String username) throws RemoteException, SecurityException {
+        try{
+            _authenticationService.validateToken(jwt, username);
+        } catch (SecurityException e) {
+            return "Authentication Failed";
+        }
+
         isRunning = false;
-        printerQueues.clear();
+        _printers.forEach((k, v) -> {
+            v.clear();
+        });
         isRunning = true;
-        System.out.println("Print server restarted");
+        return "Print server restarted";
     }
 
     @Override
-    public String status(String sessionId, String printer) 
+    public String status(String jwt, String username, String printer)
             throws RemoteException, SecurityException {
-        validateSession(sessionId);
-        return "Printer " + printer + " is " + (isRunning ? "running" : "stopped") + 
-               " with " + printerQueues.getOrDefault(printer, new ArrayList<>()).size() + 
-               " jobs in queue";
+        try{
+            _authenticationService.validateToken(jwt, username);
+        } catch (SecurityException e) {
+            return "Authentication Failed";
+        }
+
+        if (!_printers.containsKey(printer)) return "Specified printer is not available";
+
+        return "Printer " + printer + " is " + (isRunning ? "running" : "stopped") + "\n" +
+               " Jobs in queue: " + "\n" + printQueue(_printers.get(printer));
     }
 
     @Override
-    public String readConfig(String sessionId, String parameter) 
+    public String readConfig(String jwt, String username, String parameter)
             throws RemoteException, SecurityException {
-        validateSession(sessionId);
-        return configParams.getOrDefault(parameter, "Parameter not found");
+        try{
+            _authenticationService.validateToken(jwt, username);
+        } catch (SecurityException e) {
+            return "Authentication Failed";
+        }
+        return _configParams.getOrDefault(parameter, "Parameter not found");
     }
 
     @Override
-    public void setConfig(String sessionId, String parameter, String value) 
+    public String setConfig(String jwt, String username, String parameter, String value)
             throws RemoteException, SecurityException {
-        validateSession(sessionId);
-        configParams.put(parameter, value);
+        try{
+            _authenticationService.validateToken(jwt, username);
+        } catch (SecurityException e) {
+            return "Authentication Failed";
+        }
+
+        _configParams.put(parameter, value);
+        return "Config updated successfully";
+    }
+
+    private String printQueue(ArrayDeque<Job> queue) {
+        StringBuilder sb = new StringBuilder();
+        for (Job job : queue) {
+            sb.append(job.getJobId()).append(" ").append(job.getFileName()).append("\n");
+        }
+        return sb.toString();
     }
 }

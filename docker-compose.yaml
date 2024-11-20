@@ -1,0 +1,14 @@
+services:
+  mysql:
+    container_name: mysql_auth
+    image: mysql:latest
+    ports:
+      - "33061:3306"
+    command: --init-file /data/application/init_user.sql
+    volumes:
+        - ./src/main/resources/data/init_user.sql:/data/application/init_user.sql
+    environment:
+      - MYSQL_DATABASE=authdb
+      - MYSQL_ROOT_PASSWORD=root
+      - MYSQL_USER=mysql
+      - MYSQL_PASSWORD=1234 # For demonstration purposes only, in production this database would run on a secure server

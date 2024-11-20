@@ -4,7 +4,8 @@ import java.rmi.registry.Registry;
 public class PrintServerMain {
     public static void main(String[] args) {
         try {
-            PrintServer server = new PrintServer();
+            IAuthenticationService authService = new AuthenticationService();
+            PrintServer server = new PrintServer(authService);
             Registry registry = LocateRegistry.createRegistry(1099);
             registry.bind("PrintServer", server);
             System.out.println("Print Server is running...");

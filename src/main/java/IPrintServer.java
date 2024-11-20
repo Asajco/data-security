@@ -2,19 +2,21 @@ import java.rmi.Remote;
 import java.rmi.RemoteException;
 import java.util.ArrayList;
 
+
 public interface IPrintServer extends Remote {
     // Authentication methods
     String login(String username, String password) throws RemoteException;
+    String registerUser(String username, String password, String role) throws RemoteException;
     void logout(String sessionId) throws RemoteException;
     
     // Print server operations
-    void print(String sessionId, String filename, String printer) throws RemoteException, SecurityException;
-    ArrayList<String> queue(String sessionId, String printer) throws RemoteException, SecurityException;
-    void topQueue(String sessionId, String printer, int job) throws RemoteException, SecurityException;
-    void start(String sessionId) throws RemoteException, SecurityException;
-    void stop(String sessionId) throws RemoteException, SecurityException;
-    void restart(String sessionId) throws RemoteException, SecurityException;
-    String status(String sessionId, String printer) throws RemoteException, SecurityException;
-    String readConfig(String sessionId, String parameter) throws RemoteException, SecurityException;
-    void setConfig(String sessionId, String parameter, String value) throws RemoteException, SecurityException;
+    String print(String jwt, String username, String filename, String printer) throws RemoteException, SecurityException;
+    String queue(String jwt, String username, String printer) throws RemoteException, SecurityException;
+    String topQueue(String jwt, String username, String printer, String job) throws RemoteException, SecurityException;
+    String start(String jwt, String username) throws RemoteException, SecurityException;
+    String stop(String jwt, String username) throws RemoteException, SecurityException;
+    String restart(String jwt, String username) throws RemoteException, SecurityException;
+    String status(String jwt, String username, String printer) throws RemoteException, SecurityException;
+    String readConfig(String jwt, String username, String parameter) throws RemoteException, SecurityException;
+    String setConfig(String jwt, String username, String parameter, String value) throws RemoteException, SecurityException;
 }
