@@ -10,3 +10,10 @@ CREATE TABLE IF NOT EXISTS Users (
     Password VARCHAR(255) NOT NULL,
     Role VARCHAR(255)
     );
+
+-- Create the Access Control List table if it does not already exist
+CREATE TABLE IF NOT EXISTS ACL (
+    Role VARCHAR(255) PRIMARY KEY,
+    Permissions VARCHAR(255) NOT NULL
+);
+
